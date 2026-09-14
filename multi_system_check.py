@@ -1,5 +1,9 @@
 import os
 from netmiko import ConnectHandler
+from netmiko.exceptions import (
+    NetmikoAuthenticationException,
+    NetmikoTimeoutException,
+)
 
 devices = [
     {
@@ -33,13 +37,29 @@ devices = [
     },
 ]
 
-print(devices[0]['commands'][0])
-
 for device in devices:
     print(f"\n========== {device['name']} ==========")
-    connection = ConnectHandler(**device["connection"])
-    for c in device["commands"]:
-        print(f"\n----- {device['name']} :: {c} -----")
-        print(connection.send_command(c))
-    connection.disconnect()
-    print(f"Closed {device['name']}")
+    connection = None
+
+    try:
+        connection = ConnectHandler(**device["connection"])
+    except NetmikoAuthenticationException:
+        print(f"AUTH FAILED — {device['name']}")
+        continue
+    except NetmikoTimeoutException:
+        print(f"TIMEOUT — {device['name']}")
+        continue
+    except Exception as error:
+        print(f"CONNECTION ERROR — {device['name']}: {error}")
+        continue
+
+    try:
+        for command in device["commands"]:
+            print(f"\n----- {device['name']} :: {command} -----")
+            print(connection.send_command(command))
+    except Exception as error:
+        print(f"COMMAND ERROR — {device['name']}: {error}")
+    finally:
+        if connection:
+            connection.disconnect()
+            print(f"Closed {device['name']}")
