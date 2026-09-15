@@ -1,59 +1,35 @@
-from netmiko import ConnectHandler
+"""Day 1 Cisco interface check + Activity #6 error handling.
+Keep the same authorized read-only commands from Lab #1.
+"""
+
 import os
+from netmiko import ConnectHandler
+from netmiko.exceptions import NetmikoTimeoutException, NetmikoAuthenticationException
 
 device = {
     "device_type": "cisco_ios",
-    "host": os.environ.get("CISCO_HOST"),
-    "username": os.environ.get("CISCO_USERNAME"),
-    "password": os.environ.get("CISCO_PASSWORD"),
+    "host": os.getenv("CISCO_HOST"),
+    "username": os.getenv("CISCO_USERNAME"),
+    "password": os.getenv("CISCO_PASSWORD"),
+    "secret": os.getenv("CISCO_ENABLE_SECRET"),
+    "conn_timeout": 5,
 }
 
-print("\nConnecting to Cisco device...")
-connection = ConnectHandler(**device)
+try:
+    connection = ConnectHandler(**device)
+    if device.get("secret"):
+        connection.enable()
 
-interface_output = connection.send_command("show ip interface brief")
-version_output = connection.send_command("show version")
+    print("=== show ip interface brief ===")
+    print(connection.send_command("show ip interface brief"))
 
-connection.disconnect()
-print("Connection closed successfully.")
+    print("\n=== show version ===")
+    print(connection.send_command("show version"))
 
-print("\n========== SHOW IP INTERFACE BRIEF ==========")
-print(interface_output)
+    connection.disconnect()
 
-print("\n========== SHOW VERSION ==========")
-print(version_output)
+except NetmikoTimeoutException:
+    print("FAILED: SSH connection timed out.")
 
-interface_lines = interface_output.splitlines()
-
-print("\n========== LOOPBACK INTERFACE REPORT ==========")
-
-operational_count = 0
-loopback_count = 0
-
-for line in interface_lines:
-    if "Loopback" in line:
-        loopback_count += 1
-
-        fields = line.split()
-        interface_name = fields[0]
-        ip_address = fields[1]
-        protocol_status = fields[-1]
-        interface_status = " ".join(fields[4:-1])
-
-        if interface_status == "up" and protocol_status == "up":
-            operational_result = "OPERATIONAL"
-            operational_count += 1
-        else:
-            operational_result = "CHECK REQUIRED"
-
-        print(f"\nInterface Name : {interface_name}")
-        print(f"IP Address     : {ip_address}")
-        print(f"Status         : {interface_status}")
-        print(f"Protocol       : {protocol_status}")
-        print(f"Result         : {operational_result}")
-
-print("\n========== COMMANDER'S SUMMARY ==========")
-print(f"Cisco Device              : {device['host']}")
-print(f"Loopback Interfaces Found : {loopback_count}")
-print(f"Operational Interfaces    : {operational_count}")
-print(f"Check Required Interfaces : {loopback_count - operational_count}")
+except NetmikoAuthenticationException:
+    print("FAILED: SSH authentication was not accepted.")
